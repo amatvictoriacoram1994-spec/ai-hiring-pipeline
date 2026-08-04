@@ -1,0 +1,461 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "YOUR_WEBHOOK_PATH_HERE",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -976,
+        -240
+      ],
+      "id": "c959d96e-99ec-46cb-b544-1c6f7580a026",
+      "name": "Webhook",
+      "webhookId": "YOUR_WEBHOOK_ID_HERE"
+    },
+    {
+      "parameters": {
+        "amount": 10
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -832,
+        -208
+      ],
+      "id": "35c915c2-6dd0-4364-9ded-ef9fc86b4737",
+      "name": "Wait",
+      "webhookId": "YOUR_WEBHOOK_ID_HERE"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e2fe2647-dafc-47e3-bb60-27b8fb991a1e",
+              "leftValue": "={{$json.body.email}}",
+              "rightValue": "@",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "341e60c5-bc84-4ed5-ad96-1f48b85412c7",
+              "leftValue": "={{$json.body.full_name}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "b805ec54-7b70-4720-b3d2-ee223cbd997e",
+              "leftValue": "={{$json.body.resume_link}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -736,
+        -32
+      ],
+      "id": "2c8633c7-8bce-4770-9ac6-76b399e878c6",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.resume_direct_url }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -560,
+        -224
+      ],
+      "id": "d2dc5098-7e33-4be2-bef5-da69e61e3b49",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: \"claude-sonnet-4-6\",\n  max_tokens: 1024,\n  temperature: 0.1,\n  system: \"You are an expert technical recruiter evaluating a candidate application. Score the candidate across six dimensions, each from 1-10: Technical Fit, Experience Relevance, Company-Stage Fit, Impact Evidence, Communication Quality, and Growth Signal. Calculate overall_score as the weighted average using these weights based on the role: for Backend Engineer, Frontend Engineer, and QA roles, weight Technical Fit at 0.35, Experience Relevance at 0.20, Impact Evidence at 0.20, Company-Stage Fit at 0.10, Communication Quality at 0.10, Growth Signal at 0.05. For Product Marketer and GTM Lead roles, weight Experience Relevance at 0.25, Impact Evidence at 0.25, Communication Quality at 0.20, Company-Stage Fit at 0.15, Technical Fit at 0.10, Growth Signal at 0.05. Also determine ownership_signal as Strong, Moderate, or Weak based on evidence of taking initiative and owning outcomes. Set contradiction_flag to true if either of the following is true: (1) the years of experience stated does not match what the resume content implies, or (2) the candidate name provided does not reasonably match the name found in the resume content (allow for minor spelling variations, middle names, or nicknames, but flag genuine mismatches). When calculating resume-implied years of experience, count only time spent in actual paid work roles (job titles with employers), explicitly excluding time spent in full-time education such as MBA or degree programs, even if listed with dates on the resume. Use the provided current date as the true reference point for what counts as past versus future; do not rely on your own internal sense of the current date, since it may be outdated. When contradiction_flag is true, ai_reason must clearly state which contradiction was found and cite the specific mismatch (e.g. stated name vs. name found in resume, or stated years vs. resume-implied years). Respond with ONLY valid JSON in this exact structure, no other text: {\\\"overall_score\\\": number, \\\"technical_score\\\": number, \\\"experience_score\\\": number, \\\"ownership_score\\\": number, \\\"skills_found\\\": [\\\"string\\\"], \\\"skills_missing\\\": [\\\"string\\\"], \\\"ownership_signal\\\": \\\"Strong|Moderate|Weak\\\", \\\"contradiction_flag\\\": boolean, \\\"ai_recommendation\\\": \\\"SHORTLIST|HUMAN_REVIEW|REJECT\\\", \\\"ai_reason\\\": \\\"string\\\", \\\"flags\\\": [\\\"string\\\"]}\",\n  messages: [\n    {\n      role: \"user\",\n      content: \"Current date: \" + $now.toISODate() + \"\\nRole applied for: \" + $('Webhook').item.json.body.role_applied + \"\\nJob ID: \" + $('Webhook').item.json.body.job_id + \"\\nCandidate name: \" + $('Webhook').item.json.body.full_name + \"\\nYears of experience (self-reported): \" + $('Webhook').item.json.body.years_experience + \"\\nCompany type background: \" + $('Webhook').item.json.body.company_type + \"\\nResume content:\\n\" + $('Extract from File').item.json.text\n    }\n  ]\n}) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -384,
+        -208
+      ],
+      "id": "32002a2b-c976-4ea3-8c9c-ae895fddeb9d",
+      "name": "HTTP Request1",
+      "notesInFlow": true,
+      "notes": "Authentication uses a Header Auth credential (x-api-key) configured separately in n8n's credential store. No API key is stored in this workflow file."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c04bf15f-75f8-45be-9c71-8eb7a06fbf6f",
+              "name": "resume_link",
+              "value": "={{ $json.body.resume_link.match(/[-\\w]{25,}/)[0] }}",
+              "type": "string"
+            },
+            {
+              "id": "ef8094d5-ad5d-46d1-bdc3-dba7121614d5",
+              "name": "resume_direct_url",
+              "value": "={{ \"https://drive.google.com/uc?export=download&id=\" + $json.body.resume_link.match(/[-\\w]{25,}/)[0] }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -624,
+        112
+      ],
+      "id": "3cead8c2-eeec-4613-9043-3bcf268370c1",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -496,
+        -48
+      ],
+      "id": "c926fc6f-843c-476e-9752-108323f0804e",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawText = $input.item.json.content[0].text;\n\nconst cleaned = rawText\n  .replace(/```json\\s*/g, '')\n  .replace(/```\\s*/g, '')\n  .trim();\n\nconst requiredFields = {\n  overall_score: 'number',\n  technical_score: 'number',\n  experience_score: 'number',\n  ownership_score: 'number',\n  skills_found: 'object',\n  skills_missing: 'object',\n  ownership_signal: 'string',\n  contradiction_flag: 'boolean',\n  ai_recommendation: 'string',\n  ai_reason: 'string',\n  flags: 'object'\n};\n\nlet parsed;\nlet validationErrors = [];\n\ntry {\n  parsed = JSON.parse(cleaned);\n} catch (err) {\n  return [{\n    json: {\n      validation_passed: false,\n      validation_error: 'JSON_PARSE_FAILED: ' + err.message,\n      raw_claude_output: rawText\n    }\n  }];\n}\n\nfor (const [field, expectedType] of Object.entries(requiredFields)) {\n  if (!(field in parsed)) {\n    validationErrors.push(`Missing field: ${field}`);\n  } else if (typeof parsed[field] !== expectedType) {\n    validationErrors.push(`Field ${field} expected ${expectedType}, got ${typeof parsed[field]}`);\n  }\n}\n\n['overall_score', 'technical_score', 'experience_score', 'ownership_score'].forEach(f => {\n  if (parsed[f] !== undefined && (parsed[f] < 0 || parsed[f] > 10)) {\n    validationErrors.push(`Field ${f} out of expected range 0-10: ${parsed[f]}`);\n  }\n});\n\nif (validationErrors.length > 0) {\n  return [{\n    json: {\n      validation_passed: false,\n      validation_error: validationErrors.join('; '),\n      raw_claude_output: rawText\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    validation_passed: true,\n    ...parsed\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -336,
+        16
+      ],
+      "id": "4b9f312d-fb36-4cc7-a6c0-353485bd4467",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5ba1d933-ef21-4c72-919c-6f1fcce96a13",
+              "leftValue": "={{ $json.validation_passed }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -224,
+        160
+      ],
+      "id": "d04a56ed-d82e-429e-a83f-842c72c2210f",
+      "name": "If1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -64,
+        208
+      ],
+      "id": "4e0ee89b-9e88-4b0f-9d8d-9da4b8212b30",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "YOUR_NOTION_DATABASE_ID_HERE",
+          "mode": "id",
+          "__regex": "^([0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12})"
+        },
+        "title": "={{ $('Webhook').item.json.body.full_name }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Email|email",
+              "emailValue": "={{ $('Webhook').item.json.body.email }}"
+            },
+            {
+              "key": "Role|select",
+              "selectValue": "={{ $('Webhook').item.json.body.role_applied }}"
+            },
+            {
+              "key": "Job ID|rich_text",
+              "textContent": "={{ $('Webhook').item.json.body.job_id }}"
+            },
+            {
+              "key": "Company Type|select",
+              "selectValue": "={{ $('Webhook').item.json.body.company_type }}"
+            },
+            {
+              "key": "=Years Experience (Form)|number",
+              "numberValue": "={{ Number($('Webhook').item.json.body.years_experience) }}"
+            },
+            {
+              "key": "Overall Score|number",
+              "numberValue": "={{ $json.overall_score }}"
+            },
+            {
+              "key": "Technical Score|number",
+              "numberValue": "={{ $json.technical_score }}"
+            },
+            {
+              "key": "Experience Score|number",
+              "numberValue": "={{ $json.experience_score }}"
+            },
+            {
+              "key": "Ownership Score|number",
+              "numberValue": "={{ $json.ownership_score }}"
+            },
+            {
+              "key": "Skills Found|rich_text",
+              "textContent": "={{ $json.skills_found.join(', ') }}"
+            },
+            {
+              "key": "Skills Missing|rich_text",
+              "textContent": "={{ $json.skills_missing.join(', ') }}"
+            },
+            {
+              "key": "Flags|rich_text",
+              "textContent": "={{ $json.flags.join(', ') }}"
+            },
+            {
+              "key": "Contradiction Flag|checkbox",
+              "checkboxValue": "={{ $json.contradiction_flag }}"
+            },
+            {
+              "key": "Ownership Signal|select",
+              "selectValue": "={{ $json.ownership_signal }}"
+            },
+            {
+              "key": "AI Recommendation|select",
+              "selectValue": "={{ $json.ai_recommendation }}"
+            },
+            {
+              "key": "AI Reason|rich_text",
+              "textContent": "={{ $json.ai_reason }}"
+            },
+            {
+              "key": "Resume Link|url",
+              "urlValue": "={{ $('Webhook').item.json.body.resume_link }}"
+            },
+            {
+              "key": "=Batch Status|select",
+              "selectValue": "=Scored - Pending Batch"
+            },
+            {
+              "key": "Submitted At|date",
+              "date": "={{ $now.toISO() }}"
+            },
+            {
+              "key": "=Name|title",
+              "title": "={{ $('Webhook').item.json.body.full_name }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -80,
+        -16
+      ],
+      "id": "af801948-9b14-4b3f-8594-e41ccefaa0dd",
+      "name": "Create a database page",
+      "credentials": {
+        "notionApi": {
+          "id": "YOUR_NOTION_CREDENTIAL_ID_HERE",
+          "name": "Notion account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Create a database page",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "YOUR_INSTANCE_ID_HERE"
+  }
+}

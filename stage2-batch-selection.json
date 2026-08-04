@@ -1,0 +1,229 @@
+{
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -464,
+        -80
+      ],
+      "id": "4a00903e-bfa2-46ad-9978-57d0c48dd59e",
+      "name": "When clicking \u2018Execute workflow\u2019"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f1ff6e39-ca13-4094-be3f-2149b46ab81d",
+              "name": "job_id",
+              "value": "FRONTEND_ENGINEER_001",
+              "type": "string"
+            },
+            {
+              "id": "ae28694c-39b0-430e-9744-563288ee91eb",
+              "name": "",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -256,
+        -80
+      ],
+      "id": "6a4a0117-22b9-409e-96df-16771daba85d",
+      "name": "Job to Process"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "YOUR_NOTION_DATABASE_ID_HERE",
+          "mode": "list",
+          "cachedResultName": "Candidates",
+          "cachedResultUrl": "https://app.notion.com/p/YOUR_NOTION_DATABASE_ID_HERE"
+        },
+        "returnAll": true,
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Job ID|rich_text",
+              "condition": "equals",
+              "richTextValue": "={{ $json.job_id }}"
+            },
+            {
+              "key": "Batch Status|select",
+              "condition": "equals",
+              "selectValue": "Scored - Pending Batch"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -48,
+        -80
+      ],
+      "id": "d812bb3a-c1d5-41cf-9098-51de51c8208b",
+      "name": "Get many database pages",
+      "credentials": {
+        "notionApi": {
+          "id": "YOUR_NOTION_CREDENTIAL_ID_HERE",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst FLOOR = 7.0;\n\nfunction ownershipRank(signal) {\n  if (signal === 'Strong') return 3;\n  if (signal === 'Moderate') return 2;\n  if (signal === 'Weak') return 1;\n  return 0;\n}\n\nconst candidates = items.map(item => ({\n  id: item.json.id,\n  name: item.json.property_name,\n  overall_score: item.json.property_overall_score,\n  technical_score: item.json.property_technical_score,\n  ownership_signal: item.json.property_ownership_signal,\n  ownership_rank: ownershipRank(item.json.property_ownership_signal),\n}));\n\nconst totalApplicants = candidates.length;\n\n// Low-volume rule: under 10 total applicants skips floor/percentile entirely\nif (totalApplicants < 10) {\n  return candidates.map(c => ({\n    json: {\n      id: c.id,\n      name: c.name,\n      batch_status: 'Human-Review',\n      percentile_rank: null,\n      reason: 'Low volume batch (<10 total applicants), routed to Human Review per policy'\n    }\n  }));\n}\n\nconst survivors = candidates.filter(c => c.overall_score >= FLOOR);\nconst nonSurvivors = candidates.filter(c => c.overall_score < FLOOR);\n\nsurvivors.sort((a, b) => {\n  if (b.overall_score !== a.overall_score) return b.overall_score - a.overall_score;\n  if (b.technical_score !== a.technical_score) return b.technical_score - a.technical_score;\n  return b.ownership_rank - a.ownership_rank;\n});\n\nconst quota = Math.round(survivors.length * 0.10);\n\nlet results = [];\n\nif (quota === 0 || survivors.length === 0) {\n  survivors.forEach((c, idx) => {\n    results.push({ id: c.id, name: c.name, batch_status: 'Archived-Not-Selected', percentile_rank: idx + 1 });\n  });\n} else {\n  const tieKey = (c) => `${c.overall_score}|${c.technical_score}|${c.ownership_rank}`;\n  const cutoffKey = tieKey(survivors[quota - 1]);\n\n  const tieGroupIndices = [];\n  survivors.forEach((c, idx) => {\n    if (tieKey(c) === cutoffKey) tieGroupIndices.push(idx);\n  });\n\n  const groupStraddles = tieGroupIndices.some(idx => idx >= quota) && tieGroupIndices.some(idx => idx < quota);\n\n  survivors.forEach((c, idx) => {\n    let status;\n    if (groupStraddles && tieKey(c) === cutoffKey) {\n      status = 'Human-Review';\n    } else if (idx < quota) {\n      status = 'Shortlisted';\n    } else {\n      status = 'Archived-Not-Selected';\n    }\n    results.push({ id: c.id, name: c.name, batch_status: status, percentile_rank: idx + 1 });\n  });\n}\n\nnonSurvivors.forEach(c => {\n  results.push({ id: c.id, name: c.name, batch_status: 'Archived-Not-Selected', percentile_rank: null });\n});\n\nreturn results.map(r => ({ json: r }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        -80
+      ],
+      "id": "1aa6c542-ff4a-4e78-8294-dcb50309bd66",
+      "name": "Rank & Select Batch"
+    },
+    {
+      "parameters": {
+        "batchSize": 20,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        368,
+        -80
+      ],
+      "id": "6f7fcd22-b1d8-46d6-b86c-56fde95e46b9",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.id }}",
+          "__regex": "^([0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12})"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "=Batch Status|select",
+              "selectValue": "={{ $json.batch_status }}"
+            },
+            {
+              "key": "=Percentile Rank|number",
+              "numberValue": "={{ $json.percentile_rank }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        576,
+        128
+      ],
+      "id": "6a53041c-e80e-4374-a9e4-8143b82a1bca",
+      "name": "Update a database page",
+      "credentials": {
+        "notionApi": {
+          "id": "YOUR_NOTION_CREDENTIAL_ID_HERE",
+          "name": "Notion account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "When clicking \u2018Execute workflow\u2019": {
+      "main": [
+        [
+          {
+            "node": "Job to Process",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Job to Process": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages": {
+      "main": [
+        [
+          {
+            "node": "Rank & Select Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rank & Select Batch": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Update a database page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update a database page": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "YOUR_INSTANCE_ID_HERE"
+  }
+}
