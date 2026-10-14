@@ -60,3 +60,9 @@ These workflow files are sanitized for public sharing — API keys, credential I
 ## Stack
 
 n8n · Claude API (Sonnet) · Notion (as the candidate database) · Google Drive (resume storage) · Google Forms (application intake)
+
+## Reliability improvement: October 2026
+
+A reproducible offline test found that the original Stage 2 ranker could automatically shortlist a candidate that Stage 1 had flagged for human review. An independent decision guard and **15 regression tests** are documented in [reliability/README.md](reliability/README.md).
+
+In the 24-record **synthetic** test batch, flagged auto-shortlists fell from **1 to 0**, while the total shortlist stayed at two. **This is an offline code improvement, not a deployed update to the n8n workflows.** The original exported workflows remain unchanged; live Notion field mappings still need verification before integration.
